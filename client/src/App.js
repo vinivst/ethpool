@@ -350,7 +350,7 @@ class App extends Component {
                         <td>
                           <Button
                             color="danger"
-                            disabled={this.state.isAdmin}
+                            disabled={this.state.accounts[0] === member.addr}
                             onClick={() => {
                               this.handleRemoveFromTeam(member.addr, index)
                             }}
