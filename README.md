@@ -219,4 +219,4 @@ Project Link: [https://github.com/vinivst/ethpool](https://github.com/vinivst/et
 [license-url]: https://github.com/vinivst/ethpool/blob/master/LICENSE.txt
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://www.linkedin.com/in/vinivst/
-[product-screenshot]: ./images/screenshot.png
+[product-screenshot]: ./images/screenshot.PNG
