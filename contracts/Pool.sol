@@ -5,24 +5,18 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 
 contract Pool is AccessControl {
     bytes32 public constant TEAM = keccak256("TEAM");
-    uint public poolBalance;
-    uint public contractBalance;
-    struct DepositObj {
-        uint value;
-        uint time;
-    }
-    struct RewardsObj {
-        uint value;
-        uint time;
-        uint totalPooled;
+    uint public rewardFactor;
+    uint public totalShares;
+    mapping (address => User) public user;
+    struct User {
+        uint shares;
+        uint snapshot;
+        uint rewards;
     }
     struct Member {
         address addr;
         bytes32 role;
     }
-    mapping(address => DepositObj[]) public deposits;
-    mapping(address => uint) public balanceOf;
-    RewardsObj[] public rewards;
     Member[] public team;
 
     event Deposit(address sender, uint amount);
@@ -36,43 +30,13 @@ contract Pool is AccessControl {
         team.push(newMember);
     }
 
-    receive() external payable {
-        require(msg.value > 0, "You need to deposit at least some ether");
-        uint timeNow = block.timestamp;
-        DepositObj memory newDeposit = DepositObj(msg.value, timeNow);
-        deposits[msg.sender].push(newDeposit);
-        balanceOf[msg.sender] += msg.value;
-        contractBalance += msg.value;
-        poolBalance += msg.value;
-        emit Deposit(msg.sender, msg.value);
-    }
-
     function depositReward() public payable onlyRole(TEAM) {
         require(msg.value > 0, "You need to deposit at least some ether");
-        uint timeNow = block.timestamp;
-        RewardsObj memory newReward = RewardsObj(msg.value, timeNow, poolBalance);
-        rewards.push(newReward);
-        contractBalance += msg.value;
-        emit NewReward(msg.value);
-    }
-
-    function withdraw() public {
-        require(balanceOf[msg.sender] > 0, "Insufficient funds.");
-        uint amount = balanceOf[msg.sender];
-        for (uint i = 0; i < deposits[msg.sender].length; i++) {
-            for (uint z = 0; z < rewards.length; z++) {
-                if(deposits[msg.sender][i].time < rewards[z].time){
-                    amount += (deposits[msg.sender][i].value * rewards[z].value) / rewards[z].totalPooled;
-                }
-            }
+        if(totalShares > 0) {
+            uint aux = 10000 * msg.value / totalShares;
+            rewardFactor += aux;
         }
-        contractBalance -= amount;
-        poolBalance -= balanceOf[msg.sender];
-        balanceOf[msg.sender] = 0;
-        delete deposits[msg.sender];
-        (bool sent, ) = msg.sender.call{value: amount}("");
-        require(sent, "Failed to send Ether");
-        emit Withdrawal(msg.sender, amount);        
+        emit NewReward(msg.value);
     }
 
     function getTeam() external view returns(Member[] memory) {
@@ -90,5 +54,44 @@ contract Pool is AccessControl {
         revokeRole(TEAM, _member);
         team[index] = team[team.length-1];
         team.pop();
+    }
+
+
+    receive() external payable {
+        require(msg.value > 0, "You need to deposit at least some ether");
+        if (user[msg.sender].shares > 0) {
+            uint sharesAmount = msg.value;
+            uint rewards = user[msg.sender].rewards;
+            rewards += calculateReward(msg.sender);
+            totalShares += sharesAmount;
+            sharesAmount += user[msg.sender].shares;
+            User memory newUser = User(sharesAmount, rewardFactor, rewards);
+            user[msg.sender] = newUser;
+        } else {
+            totalShares += msg.value;
+            User memory newUser = User(msg.value, rewardFactor, 0);
+            user[msg.sender] = newUser;
+        }
+        emit Deposit(msg.sender, msg.value);
+    }
+    function withdraw() public returns(uint){
+        require(user[msg.sender].shares > 0, "Insufficient funds.");
+        uint rewards = user[msg.sender].rewards;
+        rewards += calculateReward(msg.sender);
+        uint deposited = user[msg.sender].shares;
+        totalShares -= deposited;
+        uint amount = deposited + rewards;
+        user[msg.sender].rewards = 0;
+        user[msg.sender].shares = 0;
+        (bool sent, ) = msg.sender.call{value: amount}("");
+        require(sent, "Failed to send Ether");
+        emit Withdrawal(msg.sender, amount);   
+        return amount;
+    }
+
+    function calculateReward(address _user) public view returns(uint){
+        uint aux2 = rewardFactor - user[_user].snapshot;
+        uint reward = aux2 * user[_user].shares / 10000;
+        return reward;
     }
 }
